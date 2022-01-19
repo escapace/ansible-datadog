@@ -1,0 +1,7 @@
+---
+- name: Converge
+  hosts: all
+  vars:
+    datadog_role_debug: true
+  roles:
+    - role: escapace.datadog

@@ -1,0 +1,7 @@
+---
+# handlers file for escapace.datadog
+
+- name: datadog daemon-reload
+  systemd:
+    daemon_reload: true
+  when: not datadog_role_debug

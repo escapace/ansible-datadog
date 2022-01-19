@@ -1,0 +1,87 @@
+---
+# defaults file for escapace.datadog
+
+# The Datadog API key to associate your Agent's data with your organization.
+# Create a new API key here: https://app.datadoghq.com/account/settings
+datadog_api_key:
+
+# The site of the Datadog intake to send Agent data to.
+# datadoghq.eu      EU
+# ddog-gov.com      US1-FED
+# us3.datadoghq.com US3
+# us5.datadoghq.com US5
+datadog_site:
+
+# The host of the Datadog intake server to send metrics to.
+datadog_url:
+
+# Collect process information
+datadog_process: false
+
+# Set to true to enable the Network Module of the System Probe.
+datadog_network: false
+
+# Set to true to enable Cloud Workload Security (CWS).
+datadog_runtime_security: false
+# Set to true to enable the File Integrity Monitoring (FIM) feature of Cloud Workload Security (CWS).
+datadog_runtime_security_fim: false
+# Set to true to enable the Syscall monitoring (recommended for troubleshooting only).
+datadog_runtime_security_syscall_monitor: false
+
+# Enable log collection
+datadog_logs: false
+
+# Collect systemd-journald logs
+datadog_logs_journald: true
+datadog_logs_journald_container_mode: true
+
+# Enable Docker Integration
+datadog_docker: false
+
+datadog_groups:
+  - "{% if datadog_logs_journald %}systemd-journal{% endif %}"
+  - "{% if datadog_docker %}docker{% endif %}"
+
+# Minimum log level of the Datadog Agent. Valid log levels are: trace, debug,
+# info, warn, error, critical, and off.
+datadog_log_level: "error"
+
+# If this flag is true then the agent will request EC2 metadata using IMDS v2,
+# which offers additional security for accessing metadata.
+datadog_ec2_prefer_imdsv2: true
+
+# Collect AWS EC2 custom tags as host tags. Requires the EC2 instance to have an
+# IAM role with the `EC2:DescribeTags` permission. See docs for further details:
+# https://docs.datadoghq.com/integrations/faq/how-do-i-pull-my-ec2-tags-without-using-the-aws-integration/
+datadog_collect_ec2_tags: true
+
+# Disable the Agent from using the auto_conf.yaml configurations.
+datadog_ignore_autoconf:
+  - apache
+  - cilium
+  - consul
+  - coredns
+  - couch
+  - couchbase
+  - datadog_cluster_agent
+  - elastic
+  - etcd
+  - external_dns
+  - harbor
+  - istio
+  - kube_apiserver_metrics
+  - kube_controller_manager
+  - kube_dns
+  - kube_scheduler
+  - kubernetes_state
+  - kyototycoon
+  - mcache
+  - presto
+  - redisdb
+  - riak
+  - snmp
+  - tomcat
+
+datadog_config: {}
+
+datadog_role_debug: false

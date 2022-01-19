@@ -1,0 +1,145 @@
+#!/bin/bash
+
+set -e
+set -u
+set -o pipefail
+
+SCRIPT_NAME=
+SCRIPT_NAME="$(basename "$0")"
+
+function print_usage {
+  echo
+  echo "Usage: run-datadog-agent [OPTIONS]"
+  echo
+  echo "This script is used to configure and run datadog-agent on an AWS server."
+  echo
+  echo "Options:"
+  echo
+  echo -e "  --secrets-bucket-name\t\tAWS S3 secrets bucket name."
+  echo
+}
+
+function log {
+  local -r level="$1"
+  local -r message="$2"
+  local -r timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+  >&2 echo -e "${timestamp} [${level}] [$SCRIPT_NAME] ${message}"
+}
+
+function log_info {
+  local -r message="$1"
+  log "INFO" "$message"
+}
+
+function log_warn {
+  local -r message="$1"
+  log "WARN" "$message"
+}
+
+function log_error {
+  local -r message="$1"
+  log "ERROR" "$message"
+}
+
+function assert_not_empty {
+  local -r arg_name="$1"
+  local -r arg_value="$2"
+
+  if [[ -z "$arg_value" ]]; then
+    log_error "The value for '$arg_name' cannot be empty"
+    print_usage
+    exit 1
+  fi
+}
+
+function assert_is_installed {
+  local -r name="$1"
+
+  if [[ ! $(command -v "${name}") ]]; then
+    log_error "The binary '$name' is required by this script but is not installed or in the system's PATH."
+    exit 1
+  fi
+}
+
+function get_object_value {
+  local -r secrets_bucket_name="${1}"
+  local -r source="${2}"
+
+  log_info "Downloading ${source}"
+
+  aws s3 cp --quiet \
+    "s3://${secrets_bucket_name}/${source}" /dev/stdout || exit 1
+}
+
+function run {
+  umask 022
+
+  local api_key
+  local secrets_bucket_name=""
+  local api_key_path="/shared/datadog-api-key"
+  local environment_file_path="/etc/datadog-agent/api_key"
+  local -r systemd_drop_in_path="/etc/systemd/system/datadog-agent.service.d/010-api-key.conf"
+
+
+  while [[ $# -gt 0 ]]; do
+    local key="$1"
+
+    case "$key" in
+      --secrets-bucket-name)
+        assert_not_empty "$key" "$2"
+        secrets_bucket_name="$2"
+        shift
+        ;;
+      --api-key-path)
+        assert_not_empty "$key" "$2"
+        api_key_path="$2"
+        shift
+        ;;
+      --help)
+        print_usage
+        exit
+        ;;
+      *)
+        log_error "Unrecognized argument: $key"
+        print_usage
+        exit 1
+        ;;
+    esac
+
+    shift
+  done
+
+  assert_not_empty "--secrets-bucket-name" "$secrets_bucket_name"
+  assert_not_empty "--api-key-path" "$api_key_path"
+  assert_is_installed "systemctl"
+  assert_is_installed "aws"
+
+  api_key="$(get_object_value "${secrets_bucket_name}" "${api_key_path}")"
+
+  local -r environment_file=$(cat <<EOF
+DD_API_KEY=${api_key}
+EOF
+)
+
+  local -r systemd_drop_in=$(cat <<EOF
+[Service]
+EnvironmentFile=${environment_file_path}
+
+EOF
+)
+
+  echo -e "$systemd_drop_in" > "${systemd_drop_in_path}"
+  echo -e "$environment_file" > "${environment_file_path}"
+
+  chown root:root "${systemd_drop_in_path}"
+  chmod 644 "${systemd_drop_in_path}"
+
+  chown dd-agent:dd-agent "${environment_file_path}"
+  chmod 640 "${environment_file_path}"
+
+  sudo systemctl daemon-reload
+  sudo systemctl enable datadog-agent.service
+  sudo systemctl restart datadog-agent.service
+}
+
+run "$@"

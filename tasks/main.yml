@@ -1,0 +1,8 @@
+---
+# tasks file for escapace.datadog
+
+- include_tasks: datadog.yml
+  when: ansible_os_family == "RedHat"
+  tags:
+    - run-datadog-agent
+    - datadog-conf

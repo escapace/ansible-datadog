@@ -1,0 +1,7 @@
+network_config:
+  enabled: {{ datadog_network | ternary("true", "false") }}
+runtime_security_config:
+ enabled: {{ datadog_runtime_security | ternary("true", "false") }}
+ fim_enabled: {{ datadog_runtime_security_fim | ternary("true", "false") }}
+ syscall_monitor:
+   enabled: {{ datadog_runtime_security_syscall_monitor | ternary("true", "false") }}

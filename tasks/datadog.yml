@@ -1,0 +1,84 @@
+---
+
+- name: creating /etc/yum.repos.d/datadog.repo
+  template:
+    src: templates/datadog.repo.j2
+    dest: /etc/yum.repos.d/datadog.repo
+    owner: root
+    group: root
+    mode: 0644
+
+- name: install datadog-agent
+  package:
+    name: datadog-agent
+    state: present
+
+- name: chcon system-probe binary
+  ansible.builtin.file:
+    path: /opt/datadog-agent/embedded/bin/system-probe
+    owner: root
+    group: root
+    mode: 0755
+    setype: bin_t
+    seuser: system_u
+
+- name: check groups
+  shell: |
+    set -o pipefail
+    /usr/bin/getent group | awk -F":" '{print $1}'
+  args:
+    executable: /bin/bash
+  register: datadog_etc_groups
+  changed_when: false
+  tags:
+    - datadog-conf
+
+- name: add dd-agent to secondary groups
+  user: name=dd-agent groups={{ item }} append=yes
+  loop: "{{ datadog_groups | select('string') | reject('eq', '') | intersect(datadog_etc_groups.stdout_lines) }}"
+  tags:
+    - datadog-conf
+
+- name: create directory for systemd drop-ins
+  file:
+    path: /etc/systemd/system/datadog-agent.service.d
+    owner: root
+    group: root
+    state: directory
+    mode: 0755
+  tags:
+    - datadog-conf
+
+- name: systemd drop-in
+  template:
+    src:  "datadog-agent-service-ignore-autoconf.conf.j2"
+    dest: "/etc/systemd/system/datadog-agent.service.d/010-ignore-autoconf.conf"
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - datadog daemon-reload
+  tags:
+    - datadog-conf
+
+- name: datadog configuration
+  template:
+    src: "{{ item.src }}"
+    dest: "/etc/datadog-agent/{{ item.dest }}"
+    owner: dd-agent
+    group: dd-agent
+    mode: 0640
+  when: item.enabled | default(true)
+  loop:
+    - { src: 'datadog.yaml.j2', dest: 'datadog.yaml' }
+    - { src: 'journald.yaml.j2', dest: 'conf.d/journald.d/conf.yaml', enabled: "{{ datadog_logs_journald }}" }
+    - { src: 'dockerd.yaml.j2', dest: 'conf.d/docker.d/docker_daemon.yaml', enabled: "{{ datadog_docker }}" }
+    - { src: 'system-probe.yaml.j2', dest: 'system-probe.yaml' }
+    - { src: 'security-agent.yaml.j2', dest: 'security-agent.yaml' }
+  tags:
+    - datadog-conf
+
+- include_tasks: provider-ec2.yml
+  when: provider is defined and provider == "ec2"
+  tags:
+    - run-datadog-agent

@@ -1,0 +1,31 @@
+{% if datadog_config["site"] is not defined and datadog_site is string and datadog_site | length > 0 %}
+site: "{{ datadog_site }}"
+{% endif %}
+{% if datadog_config["dd_url"] is not defined and datadog_url is string and datadog_url | length > 0 %}
+dd_url: "{{ datadog_url }}"
+{% endif %}
+{% if datadog_config["api_key"] is not defined and datadog_api_key is string and datadog_api_key | length > 0 %}
+api_key: "{{ datadog_api_key }}"
+{% endif %}
+{% if provider is defined and provider == "ec2" %}
+cloud_provider_metadata: ["aws"]
+{% endif %}
+{% if datadog_config["ec2_prefer_imdsv2"] is not defined and provider is defined and provider == "ec2" %}
+ec2_prefer_imdsv2: {{ datadog_ec2_prefer_imdsv2 | ternary("true", "false") }}
+{% endif %}
+{% if datadog_config["collect_ec2_tags"] is not defined and provider is defined and provider == "ec2" %}
+collect_ec2_tags: {{ datadog_collect_ec2_tags | ternary("true", "false") }}
+{% endif %}
+{% if datadog_config["process"] is not defined -%}
+process_config:
+ enabled: '{{datadog_process | ternary("true", "disabled")}}'
+{% endif %}
+{% if datadog_config["logs_enabled"] is not defined %}
+logs_enabled: {{ datadog_logs | ternary("true", "false") }}
+{% endif %}
+{% if datadog_config["log_level"] is not defined %}
+log_level: "{{ datadog_log_level }}"
+{% endif %}
+{% if datadog_config | default({}, true) | length > 0 %}
+{{ datadog_config | to_nice_yaml(indent=2) }}
+{% endif %}

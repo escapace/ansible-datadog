@@ -1,0 +1,14 @@
+---
+
+- name: allow datadog metadata access
+  template: src=templates/ferm-datadog.conf.j2 dest=/etc/ferm/ferm.d/1020-datadog.conf owner=root group=root mode=0600
+
+- name: copy run-datadog-agent script
+  ansible.builtin.copy:
+    src: files/run-datadog-agent
+    dest: "/opt/datadog-agent/bin/run-datadog-agent"
+    mode: 0770
+    owner: dd-agent
+    group: dd-agent
+  tags:
+    - run-datadog-agent

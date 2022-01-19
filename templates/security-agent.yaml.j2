@@ -1,0 +1,2 @@
+runtime_security_config:
+  enabled: {{ datadog_runtime_security | ternary("true", "false") }}
