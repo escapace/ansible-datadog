@@ -18,7 +18,7 @@ collect_ec2_tags: {{ datadog_collect_ec2_tags | ternary("true", "false") }}
 {% endif %}
 {% if datadog_config["process"] is not defined -%}
 process_config:
- enabled: '{{datadog_process | ternary("true", "disabled")}}'
+  enabled: '{{datadog_process | ternary("true", "disabled")}}'
 {% endif %}
 {% if datadog_config["logs_enabled"] is not defined %}
 logs_enabled: {{ datadog_logs | ternary("true", "false") }}

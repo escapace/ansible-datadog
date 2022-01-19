@@ -74,12 +74,8 @@ function get_object_value {
 function run {
   umask 022
 
-  local api_key
   local secrets_bucket_name=""
-  local api_key_path="/shared/datadog-api-key"
-  local environment_file_path="/etc/datadog-agent/api_key"
-  local -r systemd_drop_in_path="/etc/systemd/system/datadog-agent.service.d/010-api-key.conf"
-
+  local api_key_path="shared/datadog-api-key"
 
   while [[ $# -gt 0 ]]; do
     local key="$1"
@@ -114,28 +110,20 @@ function run {
   assert_is_installed "systemctl"
   assert_is_installed "aws"
 
+  local api_key
+
   api_key="$(get_object_value "${secrets_bucket_name}" "${api_key_path}")"
 
-  local -r environment_file=$(cat <<EOF
-DD_API_KEY=${api_key}
-EOF
-)
+  local -r datadog_yaml_path="/etc/datadog-agent/datadog.yaml"
 
-  local -r systemd_drop_in=$(cat <<EOF
-[Service]
-EnvironmentFile=${environment_file_path}
-
-EOF
-)
-
-  echo -e "$systemd_drop_in" > "${systemd_drop_in_path}"
-  echo -e "$environment_file" > "${environment_file_path}"
-
-  chown root:root "${systemd_drop_in_path}"
-  chmod 644 "${systemd_drop_in_path}"
-
-  chown dd-agent:dd-agent "${environment_file_path}"
-  chmod 640 "${environment_file_path}"
+  if grep -q "^api_key:" "${datadog_yaml_path}"
+  then
+    log_warn "Replacing datadog api key"
+    sed -i "s/^api_key:.*/api_key: \"${api_key}\"/" "${datadog_yaml_path}"
+  else
+    log_info "Writing datadog api key"
+    echo "api_key: \"${api_key}\"" >> "${datadog_yaml_path}"
+  fi
 
   sudo systemctl daemon-reload
   sudo systemctl enable datadog-agent.service
