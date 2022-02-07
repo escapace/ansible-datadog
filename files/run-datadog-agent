@@ -16,6 +16,8 @@ function print_usage {
   echo "Options:"
   echo
   echo -e "  --secrets-bucket-name\t\tAWS S3 secrets bucket name."
+  echo -e "  --role\t\tInstance role."
+  echo -e "  --enable-consul\t\tEnable Consul integration."
   echo
 }
 
@@ -63,19 +65,21 @@ function assert_is_installed {
 
 function get_object_value {
   local -r secrets_bucket_name="${1}"
-  local -r source="${2}"
+  local -r role="${2}"
+  local -r source="${role}/${3}"
 
   log_info "Downloading ${source}"
 
   aws s3 cp --quiet \
-    "s3://${secrets_bucket_name}/${source}" /dev/stdout || exit 1
+    "s3://${secrets_bucket_name}/${source}" /dev/stdout || return 1
 }
 
 function run {
   umask 022
 
+  local role=""
   local secrets_bucket_name=""
-  local api_key_path="shared/datadog-api-key"
+  local enable_consul="false"
 
   while [[ $# -gt 0 ]]; do
     local key="$1"
@@ -86,11 +90,19 @@ function run {
         secrets_bucket_name="$2"
         shift
         ;;
-      --api-key-path)
+      --role)
         assert_not_empty "$key" "$2"
-        api_key_path="$2"
+        role="$2"
         shift
         ;;
+      --enable-consul)
+        enable_consul="true"
+        ;;
+      # --api-key-path)
+      #   assert_not_empty "$key" "$2"
+      #   api_key_path="$2"
+      #   shift
+      #   ;;
       --help)
         print_usage
         exit
@@ -105,14 +117,15 @@ function run {
     shift
   done
 
-  assert_not_empty "--secrets-bucket-name" "$secrets_bucket_name"
-  assert_not_empty "--api-key-path" "$api_key_path"
+  assert_not_empty "--role" "${role}"
+  assert_not_empty "--secrets-bucket-name" "${secrets_bucket_name}"
+
   assert_is_installed "systemctl"
   assert_is_installed "aws"
 
   local api_key
 
-  api_key="$(get_object_value "${secrets_bucket_name}" "${api_key_path}")"
+  api_key="$(get_object_value "${secrets_bucket_name}" "${role}" "datadog/api-key")"
 
   local -r datadog_yaml_path="/etc/datadog-agent/datadog.yaml"
 
@@ -123,6 +136,37 @@ function run {
   else
     log_info "Writing datadog api key"
     echo "api_key: \"${api_key}\"" >> "${datadog_yaml_path}"
+  fi
+
+  if [[ "${enable_consul}" == "true" ]]
+  then
+    local consul_conf
+    local consul_acl_token=""
+    local consul_acl_token_tmp
+    local consul_conf_path="/etc/datadog-agent/conf.d/consul.d/conf.yaml"
+
+    if consul_acl_token_tmp="$(get_object_value "${secrets_bucket_name}" "${role}" "consul/acl-token-telemetry.txt")"
+    then
+      consul_acl_token="acl_token: ${consul_acl_token_tmp}"
+    fi
+
+    consul_conf=$(cat <<EOF
+init_config:
+
+instances:
+  - url: http://localhost:8500
+    catalog_checks: false
+    network_latency_checks: true
+    self_leader_check: true
+    use_prometheus_endpoint: true
+    ${consul_acl_token}
+
+EOF
+)
+
+    echo -e "${consul_conf}" > "${consul_conf_path}"
+    chown dd-agent:dd-agent "${consul_conf_path}"
+    chmod 640 "${consul_conf_path}"
   fi
 
   sudo systemctl daemon-reload
